@@ -1,15 +1,25 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 public class EnemyBehaviour : MonoBehaviour
 {
-    #region Variables
-    public List<Transform> patrollingPoints;
-    public float patrolSpeed = 4f;
-    public float chaseSpeed = 8f;
-    public float coolDownTimer = 1.25f;
 
+    #region Variables
+
+    public List<Transform> patrollingPoints;
+    public float patrolSpeed = 1.5f;
+    public float chaseSpeed = 3f;
+    public float patrolCoolDownTimer = 1.25f;
+    public float attackRadius = 1.5f;
+    public Collider swordCollider;
+    //time to chase target after target goes out of FOV.
+    public float timeToChaseAfterTargetLost = 3f;
+
+    [SerializeField] private Animator _animator;
+    [SerializeField] private NavMeshAgent _navMeshAgent;
+    [SerializeField]
     private EnemyState _currentEnemyState;
 
     [Space(5f)]
@@ -21,33 +31,61 @@ public class EnemyBehaviour : MonoBehaviour
     public LayerMask targetMask;
     public LayerMask obstacleMask;
 
-    //[HideInInspector]
-    public List<Transform> visibleTargets = new List<Transform>();
+
+    [SerializeField] private List<Transform> visibleTargets = new List<Transform>();
 
     public float meshResolution = 1;
     public int edgeResolveIterations = 4;
     public float edgeDstThreshold = .5f;
 
+    public Color32 _patrollingFovColor;
+    public Color32 _detectionFovColor;
+    public Material _fovMaterial;
     public MeshFilter viewMeshFilter;
+    public MeshRenderer viewMeshRenderer;
     private Mesh _viewMesh;
 
+    private Transform _targetToChase;
+    private float _targetLostChaseTimerCounter = 0;
     #endregion Variables
 
     #region Unity Methods
+
     void Start()
     {
+        _targetLostChaseTimerCounter = timeToChaseAfterTargetLost;
         _viewMesh = new Mesh();
         _viewMesh.name = "View Mesh";
         viewMeshFilter.mesh = _viewMesh;
 
-        InvokeRepeating(nameof(_FindVisibleTargets), 0f, .2f);
+        InvokeRepeating(nameof(_CanSeePlayer), 0f, .2f);
     }
-
+    private void Update()
+    {
+        switch (_currentEnemyState)
+        {
+            case EnemyState.Idle:
+                _Idle();
+                break;
+            case EnemyState.Patrol:
+                _Patrol();
+                break;
+            case EnemyState.Chase:
+                _Chase();
+                break;
+            case EnemyState.Attack:
+                _Attack();
+                break;
+        }
+    }
     void LateUpdate()
     {
         _DrawFieldOfView();
     }
-
+    private void OnDrawGizmos()
+    {
+        //Gizmos.DrawSphere(transform.position, attackRadius);
+    }
     #endregion Unity Methods
 
     #region Public Methods
@@ -62,11 +100,96 @@ public class EnemyBehaviour : MonoBehaviour
     #endregion Public Methods
 
     #region Private Methods
-    private void _FindVisibleTargets()
+
+    private int _patrolPointIndex = 0;
+    float _patrolCooldownCounter = 0;
+    private void _Patrol()
+    {
+        if (patrollingPoints.Count <= 0) return;
+        float distanceToPatrolPoint = Vector3.Distance(transform.position, patrollingPoints[_patrolPointIndex].position);
+        if (distanceToPatrolPoint > 0.1f)
+        {
+            _animator.SetFloat("Speed", patrolSpeed);
+            //_animator.SetFloat("MotionSpeed", patrolSpeed / 3);
+            _navMeshAgent.SetDestination(patrollingPoints[_patrolPointIndex].position);
+            distanceToPatrolPoint = Vector3.Distance(transform.position, patrollingPoints[_patrolPointIndex].position);
+        }
+        else if (distanceToPatrolPoint <= 0.1f)
+        {
+            _currentEnemyState = EnemyState.Idle;
+        }
+    }
+    private void _Idle()
+    {
+        _animator.SetFloat("Speed", Mathf.Lerp(_animator.GetFloat("Speed"), 0f, 2 * Time.deltaTime));
+        //_animator.SetFloat("MotionSpeed", patrolSpeed / 3);
+        if (_patrolCooldownCounter >= 0)
+        {
+            _patrolCooldownCounter -= Time.deltaTime;
+            if (_patrolCooldownCounter < 0)
+            {
+                _patrolCooldownCounter = Random.Range(1.25f, patrolCoolDownTimer);
+                _patrolPointIndex++;
+                if (_patrolPointIndex >= patrollingPoints.Count)
+                    _patrolPointIndex = 0;
+                _navMeshAgent.isStopped = false;
+                _currentEnemyState = EnemyState.Patrol;
+            }
+        }
+    }
+    private void _Chase()
+    {
+        if (_targetToChase == null)
+        {
+            _currentEnemyState = EnemyState.Patrol;
+            return;
+        }
+        _navMeshAgent.speed = chaseSpeed;
+        _animator.SetFloat("Speed", chaseSpeed);
+        _navMeshAgent.SetDestination(_targetToChase.position);
+        if (visibleTargets.Count <= 0)
+        {
+            _targetLostChaseTimerCounter -= Time.deltaTime;
+            if (_targetLostChaseTimerCounter < 0)
+            {
+                _targetLostChaseTimerCounter = timeToChaseAfterTargetLost;
+                _navMeshAgent.isStopped = true;
+                _currentEnemyState = EnemyState.Idle;
+            }
+        }
+        else
+            _targetLostChaseTimerCounter = timeToChaseAfterTargetLost;
+
+        if (Vector3.Distance(_targetToChase.position, transform.position) <= attackRadius)
+            _currentEnemyState = EnemyState.Attack;
+    }
+
+    private void _Attack()
+    {
+        Collider[] targetsInAttackRadius = Physics.OverlapSphere(transform.position, attackRadius, targetMask);
+        Debug.Log($"Attack State");
+        if (targetsInAttackRadius.Length > 0)
+        {
+            //GameOver
+            swordCollider.enabled = true;
+            transform.LookAt(_targetToChase, Vector3.up);
+            Debug.Log($"Attacking....");
+            _animator.SetBool("CanAttack", true);
+        }
+        else
+        {
+            Debug.Log($"No Targets in Attack range");
+            _animator.SetBool("CanAttack", false);
+            swordCollider.enabled = false;
+            _currentEnemyState = EnemyState.Chase;
+        }
+    }
+    private bool _CanSeePlayer()
     {
         visibleTargets.Clear();
+        bool isTargetVisible = false;
+        viewMeshRenderer.sharedMaterial.color = _patrollingFovColor;
         Collider[] targetsInViewRadius = Physics.OverlapSphere(transform.position, visionRange, targetMask);
-
         for (int i = 0; i < targetsInViewRadius.Length; i++)
         {
             Transform target = targetsInViewRadius[i].transform;
@@ -74,12 +197,19 @@ public class EnemyBehaviour : MonoBehaviour
             if (Vector3.Angle(transform.forward, dirToTarget) < visionAngle / 2)
             {
                 float dstToTarget = Vector3.Distance(transform.position, target.position);
+                Debug.DrawLine(transform.position, dirToTarget * dstToTarget, Color.red);
                 if (!Physics.Raycast(transform.position, dirToTarget, dstToTarget, obstacleMask))
                 {
                     visibleTargets.Add(target);
+                    viewMeshRenderer.sharedMaterial.color = _detectionFovColor;
+                    _targetToChase = target;
+                    isTargetVisible = true;
+                    //Change State to Chase
+                    _currentEnemyState = EnemyState.Chase;
                 }
             }
         }
+        return isTargetVisible;
     }
 
     private void _DrawFieldOfView()
@@ -183,6 +313,8 @@ public class EnemyBehaviour : MonoBehaviour
             return new ViewCastInfo(false, transform.position + dir * visionRange, visionRange, globalAngle);
         }
     }
+
+
     #endregion Private Methods
 
     #region Callbacks
