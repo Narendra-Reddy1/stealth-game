@@ -18,12 +18,14 @@ public class LevelTimer : MonoBehaviour
     {
         GlobalEventHandler.OnGameStarted += Callback_On_Game_Started;
         GlobalEventHandler.OnLevelCompleted += Callback_On_Level_Complete;
+        GlobalEventHandler.OnGameOver += Callback_On_Level_Complete;
     }
     private void OnDisable()
     {
 
         GlobalEventHandler.OnGameStarted -= Callback_On_Game_Started;
         GlobalEventHandler.OnLevelCompleted -= Callback_On_Level_Complete;
+        GlobalEventHandler.OnGameOver -= Callback_On_Level_Complete;
     }
     #endregion Unity Methods
 
