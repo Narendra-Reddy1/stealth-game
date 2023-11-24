@@ -16,11 +16,13 @@ public class GameManager : MonoBehaviour
     private void OnEnable()
     {
         GlobalEventHandler.OnGameOver += Callback_On_Game_Over;
+        GlobalEventHandler.OnGameStarted += Callback_On_Game_Started;
         GlobalEventHandler.OnLevelCompleted += Callback_On_Game_Complete;
         GlobalEventHandler.OnLevelTimerIsCompleted += Callback_On_Level_Timer_Complete;
     }
     private void OnDisable()
     {
+        GlobalEventHandler.OnGameStarted -= Callback_On_Game_Started;
         GlobalEventHandler.OnGameOver -= Callback_On_Game_Over;
         GlobalEventHandler.OnLevelCompleted -= Callback_On_Game_Complete;
         GlobalEventHandler.OnLevelTimerIsCompleted -= Callback_On_Level_Timer_Complete;
@@ -43,7 +45,10 @@ public class GameManager : MonoBehaviour
     {
         GlobalEventHandler.OnGameOver?.Invoke();
     }
-
+    private void Callback_On_Game_Started()
+    {
+        GlobalVariables.UpdateGameState(GameState.Running);
+    }
     private void Callback_On_Game_Complete()
     {
         GlobalVariables.UpdateGameState(GameState.Completed);

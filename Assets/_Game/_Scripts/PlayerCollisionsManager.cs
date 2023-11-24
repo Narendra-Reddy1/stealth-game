@@ -8,7 +8,7 @@ public class PlayerCollisionsManager : MonoBehaviour
         switch (other.tag)
         {
             case "Sword":
-                //GlobalEventHandler.OnGameOver?.Invoke();
+                GlobalEventHandler.OnGameOver?.Invoke();
                 break;
             case "ExitPoint":
                 GlobalEventHandler.OnLevelCompleted?.Invoke();

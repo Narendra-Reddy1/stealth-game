@@ -60,8 +60,8 @@ public class InGameUIManager : MonoBehaviour
     #region Private Methods
     private void OnClickStart()
     {
-        GlobalVariables.UpdateGameState(GameState.Running);
-        GlobalEventHandler.OnGameStarted?.Invoke();
+
+        GlobalEventHandler.OnGameStartRequested?.Invoke();
         _startPanel.SetActive(false);
     }
     private void OnClickQuitGame()
