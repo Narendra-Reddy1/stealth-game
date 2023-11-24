@@ -6,6 +6,7 @@ TagManager:
   tags:
   - CinemachineTarget
   - Sword
+  - ExitPoint
   layers:
   - Default
   - TransparentFX

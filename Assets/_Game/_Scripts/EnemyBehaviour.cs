@@ -50,7 +50,14 @@ public class EnemyBehaviour : MonoBehaviour
     #endregion Variables
 
     #region Unity Methods
-
+    private void OnEnable()
+    {
+        GlobalEventHandler.OnLevelCompleted += Callback_On_Level_Complete;
+    }
+    private void OnDisable()
+    {
+        GlobalEventHandler.OnLevelCompleted -= Callback_On_Level_Complete;
+    }
     void Start()
     {
         _targetLostChaseTimerCounter = timeToChaseAfterTargetLost;
@@ -59,9 +66,11 @@ public class EnemyBehaviour : MonoBehaviour
         viewMeshFilter.mesh = _viewMesh;
 
         InvokeRepeating(nameof(_CanSeePlayer), 0f, .2f);
+        // InvokeRepeating(nameof(_CanSmellPlayer), 0f, 1f);
     }
     private void Update()
     {
+        if (GlobalVariables.CurrentGameState != GameState.Running) return;
         switch (_currentEnemyState)
         {
             case EnemyState.Idle:
@@ -107,14 +116,14 @@ public class EnemyBehaviour : MonoBehaviour
     {
         if (patrollingPoints.Count <= 0) return;
         float distanceToPatrolPoint = Vector3.Distance(transform.position, patrollingPoints[_patrolPointIndex].position);
-        if (distanceToPatrolPoint > 0.1f)
+        if (distanceToPatrolPoint > 0.2f)
         {
             _animator.SetFloat("Speed", patrolSpeed);
+            ResetAttackState();
             //_animator.SetFloat("MotionSpeed", patrolSpeed / 3);
             _navMeshAgent.SetDestination(patrollingPoints[_patrolPointIndex].position);
-            distanceToPatrolPoint = Vector3.Distance(transform.position, patrollingPoints[_patrolPointIndex].position);
         }
-        else if (distanceToPatrolPoint <= 0.1f)
+        else if (distanceToPatrolPoint <= 0.2f)
         {
             _currentEnemyState = EnemyState.Idle;
         }
@@ -179,16 +188,20 @@ public class EnemyBehaviour : MonoBehaviour
         else
         {
             Debug.Log($"No Targets in Attack range");
-            _animator.SetBool("CanAttack", false);
-            swordCollider.enabled = false;
+            ResetAttackState();
             _currentEnemyState = EnemyState.Chase;
         }
+    }
+    private void ResetAttackState()
+    {
+        _animator.SetBool("CanAttack", false);
+        swordCollider.enabled = false;
     }
     private bool _CanSeePlayer()
     {
         visibleTargets.Clear();
         bool isTargetVisible = false;
-        viewMeshRenderer.sharedMaterial.color = _patrollingFovColor;
+        viewMeshRenderer.material.color = _patrollingFovColor;
         Collider[] targetsInViewRadius = Physics.OverlapSphere(transform.position, visionRange, targetMask);
         for (int i = 0; i < targetsInViewRadius.Length; i++)
         {
@@ -200,8 +213,9 @@ public class EnemyBehaviour : MonoBehaviour
                 Debug.DrawLine(transform.position, dirToTarget * dstToTarget, Color.red);
                 if (!Physics.Raycast(transform.position, dirToTarget, dstToTarget, obstacleMask))
                 {
-                    visibleTargets.Add(target);
-                    viewMeshRenderer.sharedMaterial.color = _detectionFovColor;
+                    if (!visibleTargets.Contains(target))
+                        visibleTargets.Add(target);
+                    viewMeshRenderer.material.color = _detectionFovColor;
                     _targetToChase = target;
                     isTargetVisible = true;
                     //Change State to Chase
@@ -212,6 +226,17 @@ public class EnemyBehaviour : MonoBehaviour
         return isTargetVisible;
     }
 
+    private bool _CanSmellPlayer()
+    {
+        bool isPlayerBeside = false;
+        if (Physics.SphereCast(transform.position, attackRadius, transform.forward, out var hit, targetMask))
+        {
+            _targetToChase = hit.transform;
+            _currentEnemyState = EnemyState.Attack;
+            isPlayerBeside = true;
+        }
+        return isPlayerBeside;
+    }
     private void _DrawFieldOfView()
     {
         int stepCount = Mathf.RoundToInt(visionAngle * meshResolution);
@@ -314,11 +339,14 @@ public class EnemyBehaviour : MonoBehaviour
         }
     }
 
-
     #endregion Private Methods
 
     #region Callbacks
-
+    private void Callback_On_Level_Complete()
+    {
+        _currentEnemyState = EnemyState.Idle;
+        _animator.SetFloat("Speed", 0);
+    }
     #endregion Callbacks
 
     public struct ViewCastInfo

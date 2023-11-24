@@ -1,4 +1,4 @@
-﻿ using UnityEngine;
+﻿using UnityEngine;
 #if ENABLE_INPUT_SYSTEM 
 using UnityEngine.InputSystem;
 #endif
@@ -132,10 +132,11 @@ namespace StarterAssets
             }
         }
 
+
         private void Start()
         {
             _cinemachineTargetYaw = CinemachineCameraTarget.transform.rotation.eulerAngles.y;
-            
+
             _hasAnimator = TryGetComponent(out _animator);
             _controller = GetComponent<CharacterController>();
             _input = GetComponent<StarterAssetsInputs>();
@@ -152,8 +153,10 @@ namespace StarterAssets
             _fallTimeoutDelta = FallTimeout;
         }
 
+
         private void Update()
         {
+            if (GlobalVariables.CurrentGameState != GameState.Running) return;
             _hasAnimator = TryGetComponent(out _animator);
 
             JumpAndGravity();
